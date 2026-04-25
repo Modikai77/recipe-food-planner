@@ -35,8 +35,8 @@
 - Background jobs: `BullMQ` + `Redis`
 - LLM/OCR:
   - Default: `OpenAI API`
-  - Primary model for parse/classification: `gpt-4.1-mini`
-  - Higher-accuracy fallback: `gpt-4.1`
+  - Primary model for parse/classification: `gpt-5.5`
+  - Retry fallback for low confidence/failure: `gpt-5.5`
 - Web extraction for URL recipes: `@mozilla/readability` + `cheerio`
 - Validation: `Zod`
 - Testing: `Vitest` + `Playwright`
@@ -331,8 +331,8 @@ model ShoppingListItem {
 - Endpoint: `POST /v1/responses`
 - Auth: `OPENAI_API_KEY`
 - Model defaults:
-  - Parse/tag flow: `gpt-4.1-mini`
-  - Retry fallback (low confidence/failure): `gpt-4.1`
+  - Parse/tag flow: `gpt-5.5`
+  - Retry fallback (low confidence/failure): `gpt-5.5`
 
 ### 5.2 Parse Prompt Contract
 System prompt goals:
@@ -575,8 +575,8 @@ NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_ANON_KEY=
 OPENAI_API_KEY=
-OPENAI_MODEL_PARSE=gpt-4.1-mini
-OPENAI_MODEL_FALLBACK=gpt-4.1
+OPENAI_MODEL_PARSE=gpt-5.5
+OPENAI_MODEL_FALLBACK=gpt-5.5
 APP_BASE_URL=
 ```
 
@@ -643,4 +643,3 @@ Acceptance:
 10. `PLAN-002`: Shopping list consolidation + conversion output.
 11. `QA-001`: E2E tests for ingest->save->plan flow.
 12. `OPS-001`: Logging, metrics, retry, dead-letter queue.
-

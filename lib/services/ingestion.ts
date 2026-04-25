@@ -9,8 +9,8 @@ import { resolveVegetarian } from "@/lib/services/dietary";
 import { computeAutoTags } from "@/lib/services/tagging";
 import { normalizeQuantity } from "@/lib/services/unitConversion";
 
-const PARSE_MODEL = process.env.OPENAI_MODEL_PARSE ?? "gpt-4.1-mini";
-const FALLBACK_MODEL = process.env.OPENAI_MODEL_FALLBACK ?? "gpt-4.1";
+const PARSE_MODEL = process.env.OPENAI_MODEL_PARSE ?? "gpt-5.5";
+const FALLBACK_MODEL = process.env.OPENAI_MODEL_FALLBACK ?? "gpt-5.5";
 const MAX_DEBUG_ERROR_MESSAGE_LENGTH = 1800;
 
 function trimDebug(message: string): string {
@@ -35,12 +35,14 @@ function diagnosticsToErrorMessage(diagnostics: string[]): string | null {
 
 function buildRecipeParsePrompt(rawText: string): string {
   return [
-    "Extract a single recipe from this content.",
-    "Return valid JSON only. Do not use markdown code fences.",
-    "Use exactly these keys:",
+    "Extract one complete recipe from this content.",
+    "Return only valid JSON. Do not include markdown, prose, or code fences.",
+    "Use exactly these top-level keys:",
     "title, description, servings, prep_minutes, cook_minutes, meal_type, cuisine,",
     "ingredients, steps, dietary, kid_friendly_score, parse_confidence, ambiguities",
-    "Do not invent quantities.",
+    "Preserve ingredient quantities and units exactly when present; do not invent missing quantities.",
+    "Use unknown values or ambiguities when the source is unclear.",
+    "Set parse_confidence from 0 to 1 based on how complete and unambiguous the extraction is.",
     "Content:",
     rawText,
   ].join("\n");
@@ -48,12 +50,14 @@ function buildRecipeParsePrompt(rawText: string): string {
 
 function buildRecipeParseImagePrompt(): string {
   return [
-    "Extract a single recipe from this image.",
-    "Return valid JSON only. Do not use markdown code fences.",
-    "Use exactly these keys:",
+    "Extract one complete recipe from this image.",
+    "Return only valid JSON. Do not include markdown, prose, or code fences.",
+    "Use exactly these top-level keys:",
     "title, description, servings, prep_minutes, cook_minutes, meal_type, cuisine,",
     "ingredients, steps, dietary, kid_friendly_score, parse_confidence, ambiguities",
-    "Do not invent quantities that are not present.",
+    "Preserve ingredient quantities and units exactly when present; do not invent missing quantities.",
+    "Use unknown values or ambiguities when the image is unclear.",
+    "Set parse_confidence from 0 to 1 based on how complete and unambiguous the extraction is.",
   ].join("\n");
 }
 
