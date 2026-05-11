@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSession, hashPassword, setSessionCookie } from "@/lib/auth";
+import { createSession, ensureDefaultHouseholdForUser, hashPassword, setSessionCookie } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { badRequest, serverError } from "@/lib/http";
 import { RegisterSchema } from "@/lib/schemas/api";
@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     });
 
     const token = await createSession(user.id);
+    await ensureDefaultHouseholdForUser(user.id);
     await setSessionCookie(token);
 
     return NextResponse.json({ ok: true, userId: user.id });

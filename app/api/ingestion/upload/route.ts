@@ -1,17 +1,20 @@
 import { access } from "node:fs/promises";
 import { JobStatus, SourceType } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getHouseholdPrincipal, hasScope } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { badRequest, serverError } from "@/lib/http";
+import { badRequest, forbidden, serverError, unauthorized } from "@/lib/http";
 import { UploadIngestionSchema } from "@/lib/schemas/api";
 import { createIngestionJob, processIngestionJob } from "@/lib/services/ingestion";
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const principal = await getHouseholdPrincipal();
+    if (!principal) {
+      return unauthorized();
+    }
+    if (!hasScope(principal, "recipes:write")) {
+      return forbidden("Missing recipes:write scope");
     }
     const parsed = UploadIngestionSchema.safeParse(await request.json());
 
@@ -34,7 +37,9 @@ export async function POST(request: NextRequest) {
     const sourceType = parsed.data.sourceType as SourceType;
 
     const { jobId, wasDeduped } = await createIngestionJob({
-      userId: user.id,
+      householdId: principal.householdId,
+      createdByUserId: principal.actorType === "user" ? principal.userId : undefined,
+      createdByTokenId: principal.actorType === "apiToken" ? principal.apiTokenId : undefined,
       sourceType,
       imagePath: parsed.data.filePath,
     });

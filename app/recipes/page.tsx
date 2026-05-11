@@ -1,7 +1,7 @@
 import { AddRecipeForm } from "@/components/AddRecipeForm";
 import { ImageImportForm } from "@/components/ImageImportForm";
 import { UrlImportForm } from "@/components/UrlImportForm";
-import { requireCurrentUser } from "@/lib/auth";
+import { requireHouseholdPrincipal } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -11,17 +11,17 @@ export default async function RecipesPage({
 }: {
   searchParams: Promise<{ ingestionJobId?: string }>;
 }) {
-  const user = await requireCurrentUser();
+  const principal = await requireHouseholdPrincipal();
   const query = await searchParams;
   const ingestionJobId = query.ingestionJobId?.trim();
   const requestedJob = ingestionJobId
     ? await prisma.ingestionJob.findFirst({
-        where: { id: ingestionJobId, userId: user.id },
+        where: { id: ingestionJobId, householdId: principal.householdId },
         select: { id: true },
       })
     : null;
   const latestJob = await prisma.ingestionJob.findFirst({
-    where: { userId: user.id },
+    where: { householdId: principal.householdId },
     orderBy: { updatedAt: "desc" },
     select: { id: true },
   });
@@ -29,7 +29,7 @@ export default async function RecipesPage({
   const usedFallbackLatest = Boolean(ingestionJobId && !requestedJob && latestJob);
 
   const recipes = await prisma.recipe.findMany({
-    where: { userId: user.id, isArchived: false },
+    where: { householdId: principal.householdId, isArchived: false },
     include: {
       tags: { include: { tag: true } },
     },

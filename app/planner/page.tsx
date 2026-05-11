@@ -1,8 +1,8 @@
 import { PlannerClient } from "@/components/PlannerClient";
-import { requireCurrentUser } from "@/lib/auth";
+import { requireHouseholdPrincipal } from "@/lib/auth";
 
 export default async function PlannerPage() {
-  await requireCurrentUser();
+  await requireHouseholdPrincipal();
 
   return (
     <section style={{ padding: "1rem 0 2rem" }}>

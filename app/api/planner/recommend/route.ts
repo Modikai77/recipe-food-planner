@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getHouseholdPrincipal, hasScope } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { badRequest, serverError } from "@/lib/http";
+import { badRequest, forbidden, serverError, unauthorized } from "@/lib/http";
 import { RecommendSchema } from "@/lib/schemas/api";
 import { recommendRecipes } from "@/lib/services/recommendations";
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const principal = await getHouseholdPrincipal();
+    if (!principal) {
+      return unauthorized();
+    }
+    if (!hasScope(principal, "mealPlans:read")) {
+      return forbidden("Missing mealPlans:read scope");
     }
     const parsed = RecommendSchema.safeParse(await request.json());
 
@@ -21,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     const recipes = await prisma.recipe.findMany({
       where: {
-        userId: user.id,
+        householdId: principal.householdId,
         isArchived: false,
       },
       select: {

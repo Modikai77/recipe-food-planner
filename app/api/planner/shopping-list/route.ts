@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getHouseholdPrincipal, hasScope } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { badRequest, serverError } from "@/lib/http";
+import { badRequest, forbidden, serverError, unauthorized } from "@/lib/http";
 import { ShoppingListSchema } from "@/lib/schemas/api";
 import { consolidateShoppingItems } from "@/lib/services/shoppingList";
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const principal = await getHouseholdPrincipal();
+    if (!principal) {
+      return unauthorized();
+    }
+    if (!hasScope(principal, "shoppingLists:write")) {
+      return forbidden("Missing shoppingLists:write scope");
     }
     const parsed = ShoppingListSchema.safeParse(await request.json());
 
@@ -20,7 +23,7 @@ export async function POST(request: NextRequest) {
     const recipes = await prisma.recipe.findMany({
       where: {
         id: { in: parsed.data.recipeIds },
-        userId: user.id,
+        householdId: principal.householdId,
         isArchived: false,
       },
       include: {
@@ -41,12 +44,8 @@ export async function POST(request: NextRequest) {
       })),
     );
 
-    const userProfile = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { measurementPref: true, conversionPrefs: true },
-    });
-    const measurementPref = userProfile?.measurementPref as "UK" | "US" | "METRIC" | null;
-    const conversionPrefs = (userProfile?.conversionPrefs as
+    const measurementPref = principal.measurementPref as "UK" | "US" | "METRIC" | null;
+    const conversionPrefs = (principal.conversionPrefs as
       | { keepSmallVolumeUnits?: boolean; forceMetricMass?: boolean }
       | null) ?? {};
 
@@ -58,7 +57,10 @@ export async function POST(request: NextRequest) {
 
     const shoppingList = await prisma.shoppingList.create({
       data: {
-        userId: user.id,
+        userId: principal.actorType === "user" ? principal.userId : undefined,
+        householdId: principal.householdId,
+        createdByUserId: principal.actorType === "user" ? principal.userId : undefined,
+        createdByTokenId: principal.actorType === "apiToken" ? principal.apiTokenId : undefined,
         title: parsed.data.title ?? "Generated Shopping List",
       },
     });

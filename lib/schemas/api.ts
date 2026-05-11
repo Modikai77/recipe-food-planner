@@ -91,3 +91,31 @@ export const ProfileUpdateSchema = z.object({
     forceMetricMass: z.boolean().optional(),
   }),
 });
+
+export const HouseholdInviteCreateSchema = z.object({
+  email: z.string().email(),
+  role: z.enum(["OWNER", "MEMBER"]).default("MEMBER"),
+});
+
+export const HouseholdInviteAcceptSchema = z.object({
+  token: z.string().min(16),
+});
+
+export const ApiTokenCreateSchema = z.object({
+  name: z.string().min(1).max(80),
+  scopes: z
+    .array(
+      z.enum([
+        "recipes:read",
+        "recipes:write",
+        "recipes:archive",
+        "recipes:delete",
+        "shoppingLists:read",
+        "shoppingLists:write",
+        "mealPlans:read",
+        "mealPlans:write",
+        "household:admin",
+      ]),
+    )
+    .min(1),
+});

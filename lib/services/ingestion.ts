@@ -434,16 +434,18 @@ function modelFromExtraction(extraction: RecipeExtraction, defaultModel: string)
 }
 
 async function upsertAutoTagsForRecipe(params: {
-  userId: string;
+  householdId: string;
+  userId?: string;
   recipeId: string;
   extraction: RecipeExtraction;
 }): Promise<void> {
   const autoTags = computeAutoTags(params.extraction);
   for (const tagName of autoTags) {
     const tag = await prisma.tag.upsert({
-      where: { userId_name: { userId: params.userId, name: tagName } },
+      where: { householdId_name: { householdId: params.householdId, name: tagName } },
       update: {},
       create: {
+        householdId: params.householdId,
         userId: params.userId,
         name: tagName,
         source: TagSource.AUTO,
@@ -469,14 +471,15 @@ async function upsertAutoTagsForRecipe(params: {
 
 export async function replaceRecipeWithExtraction(params: {
   recipeId: string;
-  userId: string;
+  householdId: string;
+  userId?: string;
   sourceText: string;
   extraction: RecipeExtraction;
   model: string;
   imagePath?: string;
   sourceLabel?: string;
 }): Promise<void> {
-  const { recipeId, userId, sourceText, extraction, model, imagePath, sourceLabel } = params;
+  const { recipeId, householdId, userId, sourceText, extraction, model, imagePath, sourceLabel } = params;
 
   await prisma.recipe.update({
     where: { id: recipeId },
@@ -542,7 +545,7 @@ export async function replaceRecipeWithExtraction(params: {
     });
   }
 
-  await upsertAutoTagsForRecipe({ userId, recipeId, extraction });
+  await upsertAutoTagsForRecipe({ householdId, userId, recipeId, extraction });
 }
 
 export async function extractRecipeFromSource(
@@ -558,7 +561,9 @@ export async function extractRecipeFromSource(
 }
 
 export async function createIngestionJob(params: {
-  userId: string;
+  householdId: string;
+  createdByUserId?: string;
+  createdByTokenId?: string;
   sourceType: SourceType;
   sourceUrl?: string;
   imagePath?: string;
@@ -566,7 +571,7 @@ export async function createIngestionJob(params: {
   const dedupeWindowStart = new Date(Date.now() - 2 * 60 * 1000);
   const existingActive = await prisma.ingestionJob.findFirst({
     where: {
-      userId: params.userId,
+      householdId: params.householdId,
       sourceType: params.sourceType,
       sourceUrl: params.sourceUrl ?? null,
       imagePath: params.imagePath ?? null,
@@ -584,7 +589,7 @@ export async function createIngestionJob(params: {
 
   const existingCompleted = await prisma.ingestionJob.findFirst({
     where: {
-      userId: params.userId,
+      householdId: params.householdId,
       sourceType: params.sourceType,
       sourceUrl: params.sourceUrl ?? null,
       imagePath: params.imagePath ?? null,
@@ -603,7 +608,10 @@ export async function createIngestionJob(params: {
 
   const job = await prisma.ingestionJob.create({
     data: {
-      userId: params.userId,
+      userId: params.createdByUserId,
+      householdId: params.householdId,
+      createdByUserId: params.createdByUserId,
+      createdByTokenId: params.createdByTokenId,
       sourceType: params.sourceType,
       sourceUrl: params.sourceUrl,
       imagePath: params.imagePath,
@@ -615,7 +623,7 @@ export async function createIngestionJob(params: {
 }
 
 async function findRecentlyCreatedMatchingRecipe(params: {
-  userId: string;
+  householdId: string;
   sourceType: SourceType;
   sourceUrl?: string | null;
   imagePath?: string | null;
@@ -623,7 +631,7 @@ async function findRecentlyCreatedMatchingRecipe(params: {
   const dedupeWindowStart = new Date(Date.now() - 5 * 60 * 1000);
   return prisma.recipe.findFirst({
     where: {
-      userId: params.userId,
+      householdId: params.householdId,
       sourceType: params.sourceType,
       sourceUrl: params.sourceUrl ?? null,
       imagePath: params.imagePath ?? null,
@@ -676,7 +684,7 @@ export async function processIngestionJob(
 
     const resolvedImagePath = imagePathOverride ?? job.imagePath;
     const existingRecipe = await findRecentlyCreatedMatchingRecipe({
-      userId: job.userId,
+      householdId: job.householdId!,
       sourceType: job.sourceType,
       sourceUrl: job.sourceUrl,
       imagePath: resolvedImagePath,
@@ -696,7 +704,10 @@ export async function processIngestionJob(
 
     const recipe = await prisma.recipe.create({
       data: {
-        userId: job.userId,
+        userId: job.createdByUserId ?? job.userId,
+        householdId: job.householdId,
+        createdByUserId: job.createdByUserId ?? job.userId,
+        createdByTokenId: job.createdByTokenId,
         title: extraction.title,
         description: extraction.description,
         servings: extraction.servings,
@@ -759,7 +770,12 @@ export async function processIngestionJob(
       });
     }
 
-    await upsertAutoTagsForRecipe({ userId: job.userId, recipeId: recipe.id, extraction });
+    await upsertAutoTagsForRecipe({
+      householdId: job.householdId!,
+      userId: job.createdByUserId ?? job.userId ?? undefined,
+      recipeId: recipe.id,
+      extraction,
+    });
 
     await prisma.ingestionJob.update({
       where: { id: jobId },
@@ -801,7 +817,7 @@ export async function processIngestionJobWithExtraction(
     const isLowConfidence = extraction.parse_confidence < 0.7;
     const resolvedImagePath = imagePathOverride ?? job.imagePath;
     const existingRecipe = await findRecentlyCreatedMatchingRecipe({
-      userId: job.userId,
+      householdId: job.householdId!,
       sourceType: job.sourceType,
       sourceUrl: job.sourceUrl,
       imagePath: resolvedImagePath,
@@ -819,7 +835,10 @@ export async function processIngestionJobWithExtraction(
 
     const recipe = await prisma.recipe.create({
       data: {
-        userId: job.userId,
+        userId: job.createdByUserId ?? job.userId,
+        householdId: job.householdId,
+        createdByUserId: job.createdByUserId ?? job.userId,
+        createdByTokenId: job.createdByTokenId,
         title: extraction.title,
         description: extraction.description,
         servings: extraction.servings,
@@ -882,7 +901,12 @@ export async function processIngestionJobWithExtraction(
       });
     }
 
-    await upsertAutoTagsForRecipe({ userId: job.userId, recipeId: recipe.id, extraction });
+    await upsertAutoTagsForRecipe({
+      householdId: job.householdId!,
+      userId: job.createdByUserId ?? job.userId ?? undefined,
+      recipeId: recipe.id,
+      extraction,
+    });
 
     await prisma.ingestionJob.update({
       where: { id: jobId },

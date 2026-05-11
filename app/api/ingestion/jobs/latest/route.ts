@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getHouseholdPrincipal, hasScope } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { notFound, serverError } from "@/lib/http";
+import { forbidden, notFound, serverError, unauthorized } from "@/lib/http";
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const principal = await getHouseholdPrincipal();
+    if (!principal) {
+      return unauthorized();
+    }
+    if (!hasScope(principal, "recipes:read")) {
+      return forbidden("Missing recipes:read scope");
     }
 
     const latestJob = await prisma.ingestionJob.findFirst({
-      where: { userId: user.id },
+      where: { householdId: principal.householdId },
       orderBy: { updatedAt: "desc" },
       select: { id: true },
     });

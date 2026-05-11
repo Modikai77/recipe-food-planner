@@ -1,16 +1,19 @@
 import { SourceType } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getHouseholdPrincipal, hasScope } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { badRequest, serverError } from "@/lib/http";
+import { badRequest, forbidden, serverError, unauthorized } from "@/lib/http";
 import { RecipeCreateSchema } from "@/lib/schemas/api";
 import { normalizeQuantity } from "@/lib/services/unitConversion";
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const principal = await getHouseholdPrincipal();
+    if (!principal) {
+      return unauthorized();
+    }
+    if (!hasScope(principal, "recipes:read")) {
+      return forbidden("Missing recipes:read scope");
     }
     const { searchParams } = new URL(request.url);
 
@@ -22,7 +25,7 @@ export async function GET(request: NextRequest) {
     const pageSize = Number(searchParams.get("pageSize") ?? "20");
 
     const where = {
-      userId: user.id,
+      householdId: principal.householdId,
       isArchived: false,
       ...(q
         ? {
@@ -77,9 +80,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const principal = await getHouseholdPrincipal();
+    if (!principal) {
+      return unauthorized();
+    }
+    if (!hasScope(principal, "recipes:write")) {
+      return forbidden("Missing recipes:write scope");
     }
     const json = await request.json();
     const parsed = RecipeCreateSchema.safeParse(json);
@@ -89,10 +95,15 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = parsed.data;
+    const createdByUserId = principal.actorType === "user" ? principal.userId : undefined;
+    const createdByTokenId = principal.actorType === "apiToken" ? principal.apiTokenId : undefined;
 
     const recipe = await prisma.recipe.create({
       data: {
-        userId: user.id,
+        userId: createdByUserId,
+        householdId: principal.householdId,
+        createdByUserId,
+        createdByTokenId,
         sourceType: SourceType.MANUAL,
         title: payload.title,
         description: payload.description,

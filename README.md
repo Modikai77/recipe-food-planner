@@ -52,3 +52,13 @@ npm test
 - `DELETE /api/recipes/:id/tags/:tagId`
 - `POST /api/planner/recommend`
 - `POST /api/planner/shopping-list`
+
+## Household sharing and Jarvis
+
+The app supports household workspaces. Each human signs in with their own account, while recipes,
+tags, meal planning, imports, and shopping lists are scoped to the shared household.
+
+Owners can manage invites and API tokens from `/profile`. Jarvis/OpenClaw should use a scoped API
+token with read/write recipe and shopping-list access, not a shared user login.
+
+See [docs/jarvis-api.md](docs/jarvis-api.md) for the stable bearer-token API surface.

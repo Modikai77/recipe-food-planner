@@ -1,26 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getHouseholdPrincipal, hasScope } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { notFound, serverError } from "@/lib/http";
+import { forbidden, serverError, unauthorized } from "@/lib/http";
 
 export async function GET(_: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const principal = await getHouseholdPrincipal();
+    if (!principal) {
+      return unauthorized();
+    }
+    if (!hasScope(principal, "recipes:read")) {
+      return forbidden("Missing recipes:read scope");
     }
     const { id } = await context.params;
 
     const job = await prisma.ingestionJob.findFirst({
       where: {
         id,
-        userId: user.id,
+        householdId: principal.householdId,
       },
     });
 
     if (!job) {
       const recentJobs = await prisma.ingestionJob.findMany({
-        where: { userId: user.id },
+        where: { householdId: principal.householdId },
         orderBy: { updatedAt: "desc" },
         take: 5,
         select: { id: true, status: true, updatedAt: true },

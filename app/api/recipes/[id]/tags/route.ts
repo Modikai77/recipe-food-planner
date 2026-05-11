@@ -1,19 +1,24 @@
 import { TagSource } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getHouseholdPrincipal, hasScope } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { badRequest, notFound, serverError } from "@/lib/http";
+import { badRequest, forbidden, notFound, serverError, unauthorized } from "@/lib/http";
 import { AddTagSchema } from "@/lib/schemas/api";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const principal = await getHouseholdPrincipal();
+    if (!principal) {
+      return unauthorized();
+    }
+    if (!hasScope(principal, "recipes:write")) {
+      return forbidden("Missing recipes:write scope");
     }
     const { id } = await context.params;
 
-    const recipe = await prisma.recipe.findFirst({ where: { id, userId: user.id, isArchived: false } });
+    const recipe = await prisma.recipe.findFirst({
+      where: { id, householdId: principal.householdId, isArchived: false },
+    });
     if (!recipe) {
       return notFound("Recipe not found");
     }
@@ -27,14 +32,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const tag = await prisma.tag.upsert({
       where: {
-        userId_name: {
-          userId: user.id,
+        householdId_name: {
+          householdId: principal.householdId,
           name: tagName,
         },
       },
       update: {},
       create: {
-        userId: user.id,
+        userId: principal.actorType === "user" ? principal.userId : undefined,
+        householdId: principal.householdId,
         name: tagName,
         source: TagSource.MANUAL,
       },

@@ -5,7 +5,7 @@ import { RecipeImageForm } from "@/components/RecipeImageForm";
 import { RecipeScoreForm } from "@/components/RecipeScoreForm";
 import { RecipeSourceForm } from "@/components/RecipeSourceForm";
 import { ReprocessRecipeButton } from "@/components/ReprocessRecipeButton";
-import { requireCurrentUser } from "@/lib/auth";
+import { requireHouseholdPrincipal } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
   toDisplayUnit,
@@ -16,14 +16,13 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function RecipeDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requireCurrentUser();
+  const principal = await requireHouseholdPrincipal();
   const { id } = await params;
-  const userProfile = await prisma.user.findUnique({ where: { id: user.id } });
-  const preference = (userProfile?.measurementPref as MeasurementPreference | null) ?? "UK";
-  const conversionPrefs = (userProfile?.conversionPrefs as ConversionPrefs | null) ?? {};
+  const preference = (principal.measurementPref as MeasurementPreference | null) ?? "UK";
+  const conversionPrefs = (principal.conversionPrefs as ConversionPrefs | null) ?? {};
 
   const recipe = await prisma.recipe.findFirst({
-    where: { id, userId: user.id, isArchived: false },
+    where: { id, householdId: principal.householdId, isArchived: false },
     include: {
       ingredients: { orderBy: { sortOrder: "asc" } },
       steps: { orderBy: { stepNumber: "asc" } },

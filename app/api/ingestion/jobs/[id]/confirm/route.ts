@@ -1,21 +1,26 @@
 import { JobStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getHouseholdPrincipal, hasScope } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { badRequest, notFound, serverError } from "@/lib/http";
+import { badRequest, forbidden, notFound, serverError, unauthorized } from "@/lib/http";
 import { RecipeExtractionSchema } from "@/lib/schemas/recipeExtraction";
 import { resolveVegetarian } from "@/lib/services/dietary";
 import { normalizeQuantity } from "@/lib/services/unitConversion";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const principal = await getHouseholdPrincipal();
+    if (!principal) {
+      return unauthorized();
+    }
+    if (!hasScope(principal, "recipes:write")) {
+      return forbidden("Missing recipes:write scope");
     }
     const { id } = await context.params;
 
-    const job = await prisma.ingestionJob.findFirst({ where: { id, userId: user.id } });
+    const job = await prisma.ingestionJob.findFirst({
+      where: { id, householdId: principal.householdId },
+    });
     if (!job) {
       return notFound("Job not found");
     }

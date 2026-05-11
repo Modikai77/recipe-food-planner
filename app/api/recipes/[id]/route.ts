@@ -1,20 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getHouseholdPrincipal, hasScope } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { badRequest, notFound, serverError } from "@/lib/http";
+import { badRequest, forbidden, notFound, serverError, unauthorized } from "@/lib/http";
 import { RecipeUpdateSchema } from "@/lib/schemas/api";
 import { normalizeQuantity } from "@/lib/services/unitConversion";
 
 export async function GET(_: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const principal = await getHouseholdPrincipal();
+    if (!principal) {
+      return unauthorized();
+    }
+    if (!hasScope(principal, "recipes:read")) {
+      return forbidden("Missing recipes:read scope");
     }
     const { id } = await context.params;
 
     const recipe = await prisma.recipe.findFirst({
-      where: { id, userId: user.id, isArchived: false },
+      where: { id, householdId: principal.householdId, isArchived: false },
       include: {
         ingredients: { orderBy: { sortOrder: "asc" } },
         steps: { orderBy: { stepNumber: "asc" } },
@@ -34,13 +37,16 @@ export async function GET(_: NextRequest, context: { params: Promise<{ id: strin
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const principal = await getHouseholdPrincipal();
+    if (!principal) {
+      return unauthorized();
+    }
+    if (!hasScope(principal, "recipes:write")) {
+      return forbidden("Missing recipes:write scope");
     }
     const { id } = await context.params;
 
-    const existing = await prisma.recipe.findFirst({ where: { id, userId: user.id } });
+    const existing = await prisma.recipe.findFirst({ where: { id, householdId: principal.householdId } });
     if (!existing) {
       return notFound("Recipe not found");
     }
@@ -133,13 +139,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
 export async function DELETE(_: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const principal = await getHouseholdPrincipal();
+    if (!principal) {
+      return unauthorized();
+    }
+    if (!hasScope(principal, "recipes:archive")) {
+      return forbidden("Missing recipes:archive scope");
     }
     const { id } = await context.params;
 
-    const existing = await prisma.recipe.findFirst({ where: { id, userId: user.id } });
+    const existing = await prisma.recipe.findFirst({ where: { id, householdId: principal.householdId } });
     if (!existing) {
       return notFound("Recipe not found");
     }
